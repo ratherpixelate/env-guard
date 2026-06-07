@@ -8,38 +8,46 @@ from env_guard.checker import parse_env_example, check
 app = typer.Typer()
 console = Console()
 
+
 @app.command()
 def scan(
     path: str = typer.Argument(".", help="Path to the project directory to scan"),
-    env_file: str = typer.Option(".env.example", "--env-file", "-e", help="Path to .env.example file"),
+    env_file: str = typer.Option(
+        ".env.example", "--env-file", "-e", help="Path to .env.example file"
+    ),
+    no_table: bool = typer.Option(
+        False, "--no-table", help="Skip the detected variables table"
+    ),
 ):
     """Scan a project directory for missing or unused environment variables."""
     console.print(f"\n[bold green]env-guard[/] scanning: [cyan]{path}[/]\n")
 
-    # Scan .py files
     results = scan_directory(path)
 
     if not results:
         console.print("[yellow]No environment variable usage found.[/]")
         raise typer.Exit()
 
-    # Show detected vars table
-    table = Table(title="Detected Environment Variables", show_lines=True)
-    table.add_column("File", style="cyan", no_wrap=True)
-    table.add_column("Variable", style="bold white")
-    table.add_column("Line", style="dim", justify="right")
+    # Detected vars table
+    if not no_table:
+        table = Table(title="Detected Environment Variables", show_lines=True)
+        table.add_column("File", style="cyan", no_wrap=True)
+        table.add_column("Variable", style="bold white")
+        table.add_column("Line", style="dim", justify="right")
 
-    for file_path, vars_found in results.items():
-        for var_name, line_num in vars_found:
-            table.add_row(file_path, var_name, str(line_num))
+        for file_path, vars_found in results.items():
+            for var_name, line_num in vars_found:
+                table.add_row(file_path, var_name, str(line_num))
 
-    console.print(table)
+        console.print(table)
 
-    # Cross-reference against .env.example
+    # Cross-reference
     declared = parse_env_example(env_file)
 
     if not declared:
-        console.print(f"[yellow]No .env.example found at '{env_file}' — skipping cross-reference.[/]\n")
+        console.print(
+            f"\n[yellow]No .env.example found at '{env_file}' — skipping cross-reference.[/]\n"
+        )
         raise typer.Exit()
 
     missing, unused = check(results, declared)
@@ -58,4 +66,16 @@ def scan(
         for var in unused:
             console.print(f"  [yellow]⚠[/] {var}")
     else:
-        console.print("[bold green]✓ No unused variables.[/]\n")
+        console.print("[bold green]✓ No unused variables.[/]")
+
+    # Summary + exit code
+    console.print()
+    if missing:
+        console.print(
+            f"[bold red]Scan complete — {len(missing)} missing, {len(unused)} unused.[/]\n"
+        )
+        raise typer.Exit(code=1)
+    else:
+        console.print(
+            f"[bold green]Scan complete — all variables accounted for. {len(unused)} unused.[/]\n"
+        )

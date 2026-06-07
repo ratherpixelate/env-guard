@@ -10,11 +10,20 @@ ENV_PATTERNS = [
 
 COMPILED = [re.compile(p) for p in ENV_PATTERNS]
 
+EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "node_modules", ".tox", ".mypy_cache"}
 
 def find_py_files(directory: str) -> list[Path]:
-    """Recursively find all .py files in a directory."""
+    """Recursively find all .py files, excluding common non-project directories."""
     root = Path(directory)
-    return list(root.rglob("*.py"))
+    results = []
+
+    for file in root.rglob("*.py"):
+        # Skip if any part of the path is in the exclude list
+        if any(part in EXCLUDE_DIRS for part in file.parts):
+            continue
+        results.append(file)
+
+    return results
 
 
 def extract_env_vars(file_path: Path) -> list[tuple[str, int]]:
