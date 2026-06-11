@@ -18,11 +18,17 @@ def scan(
     no_table: bool = typer.Option(
         False, "--no-table", help="Skip the detected variables table"
     ),
+    ignore: list[str] = typer.Option(
+        [], "--ignore", "-i", help="File or directory name to ignore (can be used multiple times)"
+    ),
 ):
     """Scan a project directory for missing or unused environment variables."""
     console.print(f"\n[bold green]env-guard[/] scanning: [cyan]{path}[/]\n")
 
-    results = scan_directory(path)
+    if ignore:
+        console.print(f"[dim]Ignoring: {', '.join(ignore)}[/]\n")
+
+    results = scan_directory(path, ignore=ignore if ignore else None)
 
     if not results:
         console.print("[yellow]No environment variable usage found.[/]")
