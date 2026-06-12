@@ -10,7 +10,36 @@ ENV_PATTERNS = [
 
 COMPILED = [re.compile(p) for p in ENV_PATTERNS]
 
+# Matches: config = dotenv_values(...)
+DOTENV_ASSIGN_PATTERN = re.compile(r'(\w+)\s*=\s*dotenv_values\(')
+
 EXCLUDE_DIRS = {".venv", "__pycache__", ".git", "node_modules", ".tox", ".mypy_cache"}
+
+
+def find_dotenv_var_names(lines: list[str]) -> set[str]:
+    """
+    Scan file lines for `name = dotenv_values(...)` assignments and
+    return the set of variable names used to hold the result.
+    """
+    names = set()
+    for line in lines:
+        match = DOTENV_ASSIGN_PATTERN.search(line)
+        if match:
+            names.add(match.group(1))
+    return names
+
+
+def build_dotenv_patterns(var_names: set[str]) -> list[re.Pattern]:
+    """
+    Build regex patterns for VAR["KEY"] and VAR.get("KEY") access,
+    one set per dotenv_values() variable name found in the file.
+    """
+    patterns = []
+    for name in var_names:
+        escaped = re.escape(name)
+        patterns.append(re.compile(rf'{escaped}\[\s*["\']([^"\']+)["\']\s*\]'))
+        patterns.append(re.compile(rf'{escaped}\.get\(\s*["\']([^"\']+)["\']\s*[\,\)]'))
+    return patterns
 
 def find_py_files(directory: str, ignore: list[str] | None = None) -> list[Path]:
     """Recursively find all .py files, excluding common non-project directories."""
@@ -39,8 +68,12 @@ def extract_env_vars(file_path: Path) -> list[tuple[str, int]]:
     except (OSError, UnicodeDecodeError):
         return results
 
+    dotenv_var_names = find_dotenv_var_names(lines)
+    dotenv_patterns = build_dotenv_patterns(dotenv_var_names)
+    all_patterns = COMPILED + dotenv_patterns
+
     for line_num, line in enumerate(lines, start=1):
-        for pattern in COMPILED:
+        for pattern in all_patterns:
             for match in pattern.finditer(line):
                 results.append((match.group(1), line_num))
 
