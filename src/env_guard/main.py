@@ -9,6 +9,11 @@ app = typer.Typer()
 console = Console()
 
 
+@app.callback()
+def main():
+    pass
+
+
 @app.command()
 def scan(
     path: str = typer.Argument(".", help="Path to the project directory to scan"),
